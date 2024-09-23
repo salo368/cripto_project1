@@ -9,13 +9,12 @@ def printHex(data):
     print(f"Formato Hex: {hex_string}")
     bits_string = ' '.join(f"{byte:08b}" for byte in data)
     print(f"Formato Bits: {bits_string}")
-    print()
 
 
 def generatePrivateSeed():
-    random.seed(5)
-    return bytes(random.getrandbits(8) for _ in range(32))
-    #return os.urandom(32)
+    # random.seed(5)
+    # return bytes(random.getrandbits(8) for _ in range(32))
+    return os.urandom(32)
 
 def functionH(seed, bytes_n):
     shake = hashlib.shake_256()
