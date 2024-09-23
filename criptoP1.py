@@ -1,26 +1,17 @@
 import hashlib
-import random
 import os
 import numpy as np
 import math
 
-def printHex(data):
-    hex_string = ' '.join(data.hex()[i:i+2] for i in range(0, len(data.hex()), 2))
-    print(f"Formato Hex: {hex_string}")
-    bits_string = ' '.join(f"{byte:08b}" for byte in data)
-    print(f"Formato Bits: {bits_string}")
-
+shake = None
 
 def generatePrivateSeed():
-    # random.seed(5)
-    # return bytes(random.getrandbits(8) for _ in range(32))
     return os.urandom(32)
 
 def functionH(seed, bytes_n):
-    shake = hashlib.shake_256()
+    global shake
     shake.update(seed)
     return shake.digest(bytes_n)
-
 
 def functionG(seed, bytes_n):
     shake = hashlib.shake_128()
@@ -177,9 +168,40 @@ def generateKeys(v,m):
 
     return pubKey, privKey
 
-generateKeys(v=197,m=57)
+def menu():
+    print("Selecciona una versión de LUOV:")
+    print("1. LUOV-7-57-197")
+    print("2. LUOV-7-83-283")
+    print("3. LUOV-7-110-374")
 
+    option = input("Ingrese el número de la opción: ")
 
+    global shake
+    
+    if option == '1':
+        m, v = 57, 197
+        shake = hashlib.shake_128()
+    elif option == '2':
+        m, v = 83, 283
+        shake = hashlib.shake_256()
+    elif option == '3':
+        m, v = 110, 374
+        shake = hashlib.shake_256()
+    else:
+        print("Opción inválida, selecciona de nuevo.")
+        return menu()
+    
+    return m, v
 
+if __name__ == "__main__":
+    m, v = menu()
+    
+    public_key, private_key = generateKeys(v, m)
 
+    with open("privateKey", "wb") as f:
+        f.write(private_key)
 
+    with open("publicKey", "wb") as f:
+        f.write(public_key)
+    
+    print("Claves generadas y guardadas exitosamente.")
