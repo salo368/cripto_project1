@@ -99,7 +99,7 @@ def generateC_L_Q1(pubSeed, v, m):
 
     return C_matrix, L_matrix, Q1_matrix
 
-def findQ2(Q1, T, m, v):
+def findQ2(Q1, T, v, m):
 
     def findPk1(k, Q1, v, m):
         Pk1 = np.zeros((v, v), dtype=int)
@@ -169,7 +169,7 @@ def generateKeys(v,m):
 
     C, L, Q1 = generateC_L_Q1(pubSeed, v, m) # <--------- C matrix, L matrix and Q1 matrix
 
-    Q2 = findQ2(Q1, T, m, v) # <--------- Q1 matrix
+    Q2 = findQ2(Q1, T, v, m) # <--------- Q1 matrix
 
     privKey = privSeed # <---------private key = private seed
 
