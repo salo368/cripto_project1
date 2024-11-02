@@ -1,26 +1,31 @@
 import hashlib
-import random
 import os
 import numpy as np
 import math
+import random
+
+
 
 def printHex(data):
     hex_string = ' '.join(data.hex()[i:i+2] for i in range(0, len(data.hex()), 2))
-    print(f"Formato Hex: {hex_string}")
-    bits_string = ' '.join(f"{byte:08b}" for byte in data)
-    print(f"Formato Bits: {bits_string}")
+    print(f'Formato Hex: {hex_string}')
+    bits_string = ' '.join(format(byte, '08b') for byte in data)
+    print(f'Formato Bits: {bits_string}')
+    print(len(data)*8)
+    print()
 
+# def generatePrivateSeed():
+#     return os.urandom(32)
 
 def generatePrivateSeed():
-    # random.seed(5)
-    # return bytes(random.getrandbits(8) for _ in range(32))
-    return os.urandom(32)
+    random.seed(47)
+    return bytes([random.getrandbits(8) for _ in range(32)])
+
 
 def functionH(seed, bytes_n):
-    shake = hashlib.shake_256()
+    shake = hashlib.shake_128()
     shake.update(seed)
     return shake.digest(bytes_n)
-
 
 def functionG(seed, bytes_n):
     shake = hashlib.shake_128()
@@ -34,20 +39,15 @@ def generatePublicSeedAndT(privSeed, v, m):
     output = functionH(privSeed,byte_length)
 
     pubSeed = output[:32] # <---------public seed
-    TBytes = output[32:] 
-
+    TBytes = output[32:]
 
     section_size = math.ceil(m / 8)
-    num_sections = len(TBytes) // section_size
 
-    T_matrix = np.zeros((num_sections, m), dtype=int)
+    T_matrix = np.zeros((v, m), dtype=int)
 
-    for i in range(num_sections):
+    for i in range(v):
         section = TBytes[i * section_size:(i + 1) * section_size]
-        bits = []
-        for byte in section:
-            bits.extend([(byte >> (7 - j)) & 1 for j in range(8)])  
-        T_matrix[i] = bits[-m:]  
+        T_matrix[i] = [(byte >> (7 - j)) & 1 for byte in section for j in range(8)][-m:]
 
     return pubSeed, T_matrix
 
@@ -60,20 +60,21 @@ def generateC_L_Q1(pubSeed, v, m):
     calls = math.ceil(m / 16)
 
     for i in range(calls):
-        output = functionG(pubSeed+i.to_bytes(1, byteorder='big'),2*(1 + (v + m) + (v * m) + ((v * (v + 1)) // 2)))
+        output = functionG(pubSeed+i.to_bytes(1, byteorder='big'),2 + 2*m +3*v + v*v + 2*m*v)
 
         CBytes = output[:2]
-
+        printHex(CBytes)
         LBytes = output[2:2+2*(v+m)]
-
-        Q1Bytes = output[2+2*(v+m):2+2*(v+m)+2*((v * m) + ((v * (v + 1)) // 2))]
+        printHex(LBytes)
+        Q1Bytes = output[2+2*(v+m):]
+        printHex(Q1Bytes)
 
         bit_string_c = ''.join(format(byte, '08b') for byte in CBytes)
 
         start_index = i * 16
         for j in range(16):
             if start_index + j < m:
-                C_matrix[start_index + j][0] = int(bit_string_c[15 - j]) 
+                C_matrix[start_index + j][0] = int(bit_string_c[15 - j])
 
         bit_string_l = ''.join(format(byte, '08b') for byte in LBytes)
         bit_string_l = bit_string_l[::-1]
@@ -82,7 +83,7 @@ def generateC_L_Q1(pubSeed, v, m):
             if start_index + j < m:
                 n = v + m
                 bit_group = bit_string_l[j * n:(j + 1) * n]
-                
+
                 for k in range(n):
                     L_matrix[start_index + j][k] = int(bit_group[k])
 
@@ -93,9 +94,14 @@ def generateC_L_Q1(pubSeed, v, m):
             if start_index + j < m:
                 n =  (v * m) + ((v * (v + 1)) // 2)
                 bit_group = bit_string_q1[j * n:(j + 1) * n]
-                
+
                 for k in range(n):
                     Q1_matrix[start_index + j][k] = int(bit_group[k])
+
+    
+    print(C_matrix)
+    print(L_matrix)
+    print(Q1_matrix)
 
     return C_matrix, L_matrix, Q1_matrix
 
@@ -141,18 +147,18 @@ def findQ2(Q1, T, v, m):
 def getPublicKey(pubSeed, Q2):
 
     pubSeed_bytes = bytearray(pubSeed)
-    
+
     bit_sequence = []
 
-    for col in Q2.T: 
-        bit_sequence.extend(col) 
+    for col in Q2.T:
+        bit_sequence.extend(col)
 
     bit_length = len(bit_sequence)
 
     if bit_length % 8 != 0:
         padding_length = 8 - (bit_length % 8)
         bit_sequence = [0] * padding_length + bit_sequence
-    
+
     byte_sequence = bytearray()
     for i in range(0, len(bit_sequence), 8):
         byte = sum(bit_sequence[j] << (7 - (j % 8)) for j in range(i, i + 8))
@@ -165,7 +171,7 @@ def generateKeys(v,m):
 
     privSeed = generatePrivateSeed() # <---------private seed
 
-    pubSeed, T = generatePublicSeedAndT(privSeed,v,m) # <--------- private seed and T matrix 
+    pubSeed, T = generatePublicSeedAndT(privSeed,v,m) # <--------- private seed and T matrix
 
     C, L, Q1 = generateC_L_Q1(pubSeed, v, m) # <--------- C matrix, L matrix and Q1 matrix
 
@@ -177,12 +183,19 @@ def generateKeys(v,m):
 
     return pubKey, privKey
 
-pubKey, privKey = generateKeys(v=374,m=110)
+def run():
 
-printHex(pubKey)
-printHex(privKey)
+    m, v = 3, 2
+    # m, v = 83, 283
+    # m, v = 110, 374
 
+    public_key, private_key = generateKeys(v, m)
 
+    # print("Public Key: ", public_key)
+    # print("Private Key: ", private_key)
+    # print()
+    # printHex(public_key)
+    # printHex(private_key)
 
-
-
+if __name__ == "__main__":
+    run()
