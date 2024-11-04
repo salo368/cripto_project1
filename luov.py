@@ -3,6 +3,7 @@ from XOFs import Select_H, shake128
 from math import ceil
 from Crypto.Random import get_random_bytes
 from typing import Tuple
+import numpy as np
 
 class LUOV():
 
@@ -35,6 +36,53 @@ class LUOV():
         q2 = self.find_q2(q1, t)
         return self.encode_public_key(public_seed, q2), private_seed
     
+    def bytes_to_field(self, data: bytes) -> galois.FieldArray:
+        bits = []
+        for byte in data:
+            bits.extend(self.iter_bits(byte))
+        elements = []
+        for i in range(0, len(bits), self.r):
+            group = bits[i:i + self.r]
+            element = int("".join(str(bit) for bit in group), 2)
+            elements.append(element)
+        return self.field(elements)
+
+    def hash_digest(self, message: str, salt: bytes) -> galois.FieldArray:
+        digest = self.h(message.encode() + (0).to_bytes(1, 'big') + salt, self.m * self.r)
+        return self.bytes_to_field(digest)
+
+    def sign(self, private_seed: bytes, message: str):
+        private_sponge = self.initialize_and_absorb_private_seed(private_seed)
+        public_seed = self.squeeze_public_seed(private_sponge)
+        t = self.squeeze_t(private_sponge)
+        public_sponge = self.initialize_and_absorb_public_seed(public_seed)
+        c, l, q1 = self.squeeze_public_map(public_sponge)
+        salt = get_random_bytes(16)
+        h = self.hash_digest(message, salt)
+        while True:
+            v = self.bytes_to_field(get_random_bytes(self.r * self.v // 8))
+            a = self.build_augmented_matrix(c, l, q1, t, h, v)
+            print(a)
+            break
+    
+    def build_augmented_matrix(self, c, l, q1, t, h, v):
+        v_concat_0 = self.field(np.concatenate([v, np.zeros(1)])).reshape(-1, 1)
+
+        rhs = h.reshape(-1, 1) - c.reshape(-1, 1) - l @ v_concat_0
+
+        lhs = l @ self.field(np.vstack([-t, np.eye(self.m)]))
+
+        for k in range(self.m):
+            pk1 = self.find_pk1(k, q1)
+            pk2 = self.find_pk2(k, q1)
+            rhs[k] = rhs[k] - v.T @ pk1 @ v
+            fk2 = -(pk1 + pk1.T) @ t + pk2
+            lhs[k] = lhs[k] + v @ fk2
+
+        augmented_matrix = np.hstack([lhs, rhs])
+
+        return augmented_matrix
+
     def initialize_and_absorb_private_seed(self, private_seed: bytes) -> bytes:
         return self.h(private_seed, 32 + ceil(self.m / 8) * self.v)
 
