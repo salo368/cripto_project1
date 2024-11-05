@@ -15,8 +15,6 @@ class LUOV():
         self.n = m + v
         self.functionH = selectedXOF(m, v)
         self.functionG = shake128
-
-        self.privateKey = None
     
     def generatePrivateSeed(self) -> bytes:
         privateSeed = get_random_bytes(32)
@@ -83,13 +81,13 @@ class LUOV():
 
         GF = galois.GF(2)
         C = GF.Zeros((self.m, 1))
-        L = GF.Zeros((self.m, self.v + self.m))
+        L = GF.Zeros((self.m, self.n))
         Q1 = GF.Zeros((self.m, self.v*self.m+(self.v*(self.v+1))//2))
         
         for i, block in enumerate(callsBlocks):
             CBytes = block[:2]
-            LBytes = block[2:2+2*(self.v + self.m)]
-            Q1Bytes = block[2+2*(self.v + self.m):]
+            LBytes = block[2:2+2*(self.n)]
+            Q1Bytes = block[2+2*(self.n):]
         
             bitsC = (''.join(format(byte, '08b') for byte in CBytes))[-(min(i*16+16,self.m)%16):]
 
@@ -99,7 +97,7 @@ class LUOV():
             bitsL = ''.join(format(byte, '08b') for byte in LBytes)
             bitsLColumns = [bitsL[i:i+16] for i in range(0, len(bitsL), 16)]
 
-            for k in range(self.v+self.m):
+            for k in range(self.n):
                 for j in range(i*16,min(i*16+16,self.m)):
                     L[j, k] = GF(((bitsLColumns[k])[-(min(i*16+16,self.m)%16):])[j % 16])
 
@@ -266,7 +264,7 @@ class LUOV():
     def encodeSignature(self, S: galois.GF, salt: bytes) -> bytes:
 
         bits = ""
-        for i in range(self.m + self.v): 
+        for i in range(self.n): 
             value = format(S[i,0], f'0{self.r}b')
             bits += value
         
