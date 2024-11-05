@@ -18,9 +18,16 @@ def printHex(data):
 #     return os.urandom(32)
 
 def generatePrivateSeed():
-    random.seed(47)
-    return bytes([random.getrandbits(8) for _ in range(32)])
+    random.seed(43)
+    # return bytes([random.getrandbits(8) for _ in range(32)])
+    return b' \x92\xb4Z\x0f\xad\x89\x0c\x18\xe2\x91\xe8\xbe\\xx\xb2\xd1W\x0f\xd1\x86\xf7\xe0\xc2\xcf\x1d\xc1[\xd5zZ'
 
+def generateSalt():
+    random.seed(43)
+    return bytes([random.getrandbits(8) for _ in range(16)])
+
+def generateRandomBits(n):
+    return ''.join(random.choice('01') for _ in range(n))
 
 def functionH(seed, bytes_n):
     shake = hashlib.shake_128()
@@ -61,47 +68,29 @@ def generateC_L_Q1(pubSeed, v, m):
 
     for i in range(calls):
         output = functionG(pubSeed+i.to_bytes(1, byteorder='big'),2 + 2*m +3*v + v*v + 2*m*v)
-
+        printHex(output)
         CBytes = output[:2]
-        printHex(CBytes)
         LBytes = output[2:2+2*(v+m)]
-        printHex(LBytes)
         Q1Bytes = output[2+2*(v+m):]
-        printHex(Q1Bytes)
 
-        bit_string_c = ''.join(format(byte, '08b') for byte in CBytes)
+        bit_string_c = (''.join(format(byte, '08b') for byte in CBytes))[-(min(i*16+16,m)%16):]
 
-        start_index = i * 16
-        for j in range(16):
-            if start_index + j < m:
-                C_matrix[start_index + j][0] = int(bit_string_c[15 - j])
-
+        for j in range(i*16,min(i*16+16,m)):
+            C_matrix[j][0] = bit_string_c[j % 16]
+    
         bit_string_l = ''.join(format(byte, '08b') for byte in LBytes)
-        bit_string_l = bit_string_l[::-1]
+        bit_string_l_list = [bit_string_l[i:i+16] for i in range(0, len(bit_string_l), 16)]
 
-        for j in range(16):
-            if start_index + j < m:
-                n = v + m
-                bit_group = bit_string_l[j * n:(j + 1) * n]
-
-                for k in range(n):
-                    L_matrix[start_index + j][k] = int(bit_group[k])
+        for k in range(v+m):
+            for j in range(i*16,min(i*16+16,m)):
+                L_matrix[j][k] = ((bit_string_l_list[k])[-(min(i*16+16,m)%16):])[j % 16]
 
         bit_string_q1 = ''.join(format(byte, '08b') for byte in Q1Bytes)
-        bit_string_q1 = bit_string_q1[::-1]
+        bit_string_q1_list = [bit_string_q1[i:i+16] for i in range(0, len(bit_string_q1), 16)]
 
-        for j in range(16):
-            if start_index + j < m:
-                n =  (v * m) + ((v * (v + 1)) // 2)
-                bit_group = bit_string_q1[j * n:(j + 1) * n]
-
-                for k in range(n):
-                    Q1_matrix[start_index + j][k] = int(bit_group[k])
-
-    
-    print(C_matrix)
-    print(L_matrix)
-    print(Q1_matrix)
+        for k in range((v*(v+1)//2) + v*m):
+            for j in range(i*16,min(i*16+16,m)):
+                Q1_matrix[j][k] = ((bit_string_q1_list[k])[-(min(i*16+16,m)%16):])[j % 16]
 
     return C_matrix, L_matrix, Q1_matrix
 
@@ -169,33 +158,53 @@ def getPublicKey(pubSeed, Q2):
 
 def generateKeys(v,m):
 
-    privSeed = generatePrivateSeed() # <---------private seed
+    privSeed = generatePrivateSeed() # <--------- private seed
+
+    printHex(privSeed)
+
+    pubSeed, T = generatePublicSeedAndT(privSeed,v,m) # <--------- private seed and T matrix
+
+    print(T)
+
+    C, L, Q1 = generateC_L_Q1(pubSeed, v, m) # <--------- C matrix, L matrix and Q1 matrix
+
+    print(C)
+    print(L)
+    print(Q1)
+
+    Q2 = findQ2(Q1, T, v, m) # <--------- Q2 matrix
+
+    print(Q2)
+
+    privKey = privSeed # <--------- private key = private seed
+
+    pubKey = getPublicKey(pubSeed, Q2) # <--------- public key
+
+    return pubKey, privKey
+
+def sign(privKey, message, v, m, r):
+
+    privSeed = privKey # <--------- private seed
 
     pubSeed, T = generatePublicSeedAndT(privSeed,v,m) # <--------- private seed and T matrix
 
     C, L, Q1 = generateC_L_Q1(pubSeed, v, m) # <--------- C matrix, L matrix and Q1 matrix
 
-    Q2 = findQ2(Q1, T, v, m) # <--------- Q2 matrix
+    salt = generateSalt() # <--------- salt
 
-    privKey = privSeed # <---------private key = private seed
+    h = functionH(message + b'\x00' + salt, m*r) # <--------- h
 
-    pubKey = getPublicKey(pubSeed, Q2) # <---------public key
+    vinager = generateRandomBits(10) # <--------- vinager variables
 
-    return pubKey, privKey
+    
 
 def run():
 
-    m, v = 3, 2
-    # m, v = 83, 283
-    # m, v = 110, 374
+    r, v, m = 1, 5, 4 
 
     public_key, private_key = generateKeys(v, m)
 
-    # print("Public Key: ", public_key)
-    # print("Private Key: ", private_key)
-    # print()
-    # printHex(public_key)
-    # printHex(private_key)
+    sign(private_key, "Hola mundo".encode(), v, m, r)
 
 if __name__ == "__main__":
     run()
